@@ -1,0 +1,25 @@
+Transformer-Based_Hand_Gesture_Detection/
+│
+├── data/
+│   ├── raw/
+│   │   └── DB4/  # Extracted raw DB4 dataset here
+│   └── processed/  # Will contain processed data after running the preprocessing script
+│
+├── scripts/
+│   ├── preprocess.py  # Main preprocessing pipeline script
+│   ├── cleaning.py    # Handles data cleaning and quality check
+│   ├── normalization.py  # Handles data normalization
+│   ├── windowing.py   # Creates sliding windows
+│   ├── features.py    # Optional: Feature extraction script
+│   ├── positional_encoding.py  # Adds positional encoding to data
+│   └── batching.py    # Handles batching and formatting for model input
+│
+├── models/
+│   └── model.py       # Transformer model definition
+│
+├── notebooks/
+│   └── exploration.ipynb  # Jupyter notebook for exploratory data analysis
+│
+├── venv/  # Your Python virtual environment (if applicable)
+├── requirements.txt  # Dependencies for the project
+└── README.md  # Documentation
