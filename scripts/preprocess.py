@@ -6,7 +6,7 @@ import joblib
 from scipy.fft import fft  # For optional feature extraction
 from sklearn.preprocessing import StandardScaler
 
-# Paths
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW_DATA_DIR = os.path.join(BASE_DIR, 'data', 'raw', 'DB4')
 PROCESSED_DATA_DIR = os.path.join(BASE_DIR, 'data', 'processed')
