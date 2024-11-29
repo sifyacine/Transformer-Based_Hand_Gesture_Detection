@@ -4,4 +4,5 @@
 *.mp4
 *.iso
 *.mat
+*.pkl
 large_files/
