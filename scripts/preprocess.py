@@ -1,108 +1,97 @@
 import os
 import numpy as np
-from scipy.io import loadmat
-from sklearn.model_selection import train_test_split
-import joblib
-
+from data_loader import load_fold_data
 from cleaning import clean_data
 from normalization import normalize_emg
 from windowing import create_sliding_windows
 from positional_encoding import positional_encoding
+import joblib
 
-# Define base directories
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RAW_DATA_DIR = os.path.join(BASE_DIR, 'data', 'raw', 'DB4')  # Adjust DB name
-PROCESSED_DATA_DIR = os.path.join(BASE_DIR, 'data', 'processed')
-
-# Ensure processed directory exists
-os.makedirs(PROCESSED_DATA_DIR, exist_ok=True)
-
-def prepare_dataset():
+def preprocess_fold(fold_dir, raw_data_dir, processed_dir):
     """
-    Main pipeline to preprocess the DB4 dataset for transformer-based gesture detection.
-    This function supports hierarchical directories for subjects and files, with error handling.
+    Preprocess data for a single fold.
+    Args:
+        fold_dir (str): Path to the fold directory (e.g., 'data/folds/fold_1').
+        raw_data_dir (str): Path to the raw data directory (e.g., 'data/raw/DB4').
+        processed_dir (str): Path to save processed data (e.g., 'data/processed/fold_1').
     """
-    all_windows = []
-    all_labels = []
+    print(f"Processing fold: {fold_dir}")
+    os.makedirs(processed_dir, exist_ok=True)
 
-    # Traverse subjects and their .mat files
-    for subject_dir in os.listdir(RAW_DATA_DIR):
-        subject_path = os.path.join(RAW_DATA_DIR, subject_dir)
-
-        # Ensure it's a directory
-        if not os.path.isdir(subject_path):
-            continue
-
-        print(f"Processing subject: {subject_dir}")
-
-        # Find all .mat files in the subject's directory
-        mat_files = [f for f in os.listdir(subject_path) if f.endswith('.mat')]
-
-        for mat_file in mat_files:
-            file_path = os.path.join(subject_path, mat_file)
-            try:
-                print(f"Loading data from {file_path}...")
-
-                # Load data
-                data = loadmat(file_path)
-                emg_signals = data['emg']  # Adjust key as per DB4 structure
-                labels = data['stimulus']  # Adjust key as per DB4 structure
-
-                # Flatten labels if needed
-                if len(labels.shape) > 1:
-                    labels = labels.flatten()
-
-                # Apply preprocessing steps
-                emg_signals, labels = clean_data(emg_signals, labels)
-                emg_signals, _ = normalize_emg(emg_signals)
-                windows, window_labels = create_sliding_windows(emg_signals, labels)
-
-                # Collect processed data
-                all_windows.append(windows)
-                all_labels.append(window_labels)
-
-            except KeyError as e:
-                print(f"KeyError: {e} in file {mat_file}. Skipping this file.")
-            except ValueError as e:
-                print(f"ValueError: {e} in file {mat_file}. Skipping this file.")
-            except Exception as e:
-                print(f"Unexpected error in file {mat_file}: {e}. Skipping this file.")
-
-    # Combine all data
+    # Load train and validation subjects
     try:
-        all_windows = np.concatenate(all_windows, axis=0)
-        all_labels = np.concatenate(all_labels, axis=0)
-    except ValueError as e:
-        print(f"ValueError during concatenation: {e}. Check input shapes.")
-        return
+        train_subjects = np.load(os.path.join(fold_dir, "train_subjects.npy"))
+        val_subjects = np.load(os.path.join(fold_dir, "val_subjects.npy"))
+    except FileNotFoundError as e:
+        raise FileNotFoundError(f"Missing subject files in {fold_dir}: {e}")
 
-    # Add positional encodings
-    try:
-        print("Adding positional encodings...")
-        positional_encodings = positional_encoding(seq_len=all_windows.shape[1], d_model=all_windows.shape[2])
-        all_windows += positional_encodings
-    except Exception as e:
-        print(f"Error adding positional encodings: {e}.")
-        return
+    def preprocess_subjects(subjects, split_name):
+        print(f"Preprocessing {split_name} subjects for fold: {fold_dir}")
+        all_windows = []
+        all_labels = []
 
-    # Split data
-    try:
-        print("Splitting data...")
-        X_train, X_temp, y_train, y_temp = train_test_split(all_windows, all_labels, test_size=0.3, random_state=42)
-        X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)
-    except Exception as e:
-        print(f"Error during train-test split: {e}.")
-        return
+        for subject in subjects:
+            subject_dir = os.path.join(raw_data_dir, subject)
+            if not os.path.exists(subject_dir):
+                print(f"Warning: Subject directory {subject_dir} does not exist. Skipping...")
+                continue
 
-    # Save processed data
-    try:
-        print("Saving processed data...")
-        joblib.dump((X_train, y_train), os.path.join(PROCESSED_DATA_DIR, 'train_data.pkl'))
-        joblib.dump((X_val, y_val), os.path.join(PROCESSED_DATA_DIR, 'val_data.pkl'))
-        joblib.dump((X_test, y_test), os.path.join(PROCESSED_DATA_DIR, 'test_data.pkl'))
-        print("Data preparation complete. Processed data saved in 'data/processed/'.")
-    except Exception as e:
-        print(f"Error saving processed data: {e}.")
+            mat_files = [f for f in os.listdir(subject_dir) if f.endswith('.mat')]
+            if not mat_files:
+                print(f"Warning: No .mat files found in {subject_dir}. Skipping...")
+                continue
+
+            for mat_file in mat_files:
+                file_path = os.path.join(subject_dir, mat_file)
+                try:
+                    emg_data, labels = load_fold_data(file_path, fold_idx=1)
+
+                    # Apply preprocessing steps
+                    emg_data, labels = clean_data(emg_data, labels)
+                    emg_data, _ = normalize_emg(emg_data)
+                    windows, window_labels = create_sliding_windows(emg_data, labels)
+
+                    all_windows.append(windows)
+                    all_labels.append(window_labels)
+                except Exception as e:
+                    print(f"Error processing file {file_path}: {e}")
+                    continue
+
+        if all_windows:
+            # Combine windows and add positional encodings
+            all_windows = np.concatenate(all_windows, axis=0)
+            all_labels = np.concatenate(all_labels, axis=0)
+            positional_enc = positional_encoding(all_windows.shape[1], all_windows.shape[2])
+            all_windows += positional_enc
+
+            # Save preprocessed data
+            save_path = os.path.join(processed_dir, f"{split_name}_data.pkl")
+            joblib.dump((all_windows, all_labels), save_path)
+            print(f"Saved {split_name} data to {save_path}")
+        else:
+            print(f"No data to save for {split_name} in fold {fold_dir}")
+
+    preprocess_subjects(train_subjects, "train")
+    preprocess_subjects(val_subjects, "val")
 
 if __name__ == "__main__":
-    prepare_dataset()
+    base_folds_dir = "data/folds"
+    raw_data_dir = "data/raw/DB4"
+    processed_base_dir = "data/processed"
+
+    if not os.path.exists(base_folds_dir):
+        raise FileNotFoundError(f"Folds directory {base_folds_dir} not found.")
+    if not os.path.exists(raw_data_dir):
+        raise FileNotFoundError(f"Raw data directory {raw_data_dir} not found.")
+
+    fold_dirs = [f for f in os.listdir(base_folds_dir) if f.startswith("fold_")]
+    if not fold_dirs:
+        raise FileNotFoundError(f"No fold directories found in {base_folds_dir}.")
+
+    for fold_dir in fold_dirs:
+        fold_path = os.path.join(base_folds_dir, fold_dir)
+        processed_path = os.path.join(processed_base_dir, fold_dir)
+        try:
+            preprocess_fold(fold_path, raw_data_dir, processed_path)
+        except Exception as e:
+            print(f"Error processing fold {fold_dir}: {e}")
