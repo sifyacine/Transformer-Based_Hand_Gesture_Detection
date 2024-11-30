@@ -7,11 +7,10 @@ import joblib
 from cleaning import clean_data
 from normalization import normalize_emg
 from windowing import create_sliding_windows
-from features import extract_fft_features
 from positional_encoding import positional_encoding
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RAW_DATA_DIR = os.path.join(BASE_DIR, 'data', 'raw', 'DB4')
+RAW_DATA_DIR = os.path.join(BASE_DIR, 'data', 'raw', 'DB3_s4')
 PROCESSED_DATA_DIR = os.path.join(BASE_DIR, 'data', 'processed')
 
 os.makedirs(PROCESSED_DATA_DIR, exist_ok=True)
